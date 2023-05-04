@@ -1,6 +1,5 @@
-import jax
-import jax.numpy as jnp
-from jax.tree_util import Partial
+import os, random
+import matplotlib.pyplot as plt
 
 
 def random_name(length=5):

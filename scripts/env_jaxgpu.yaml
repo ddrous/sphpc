@@ -1,0 +1,20 @@
+name: tensorflow
+channels:
+  - apple
+  - conda-forge
+dependencies:
+    - python=3.10
+    - pip>=19.0
+    - jupyter
+    - scikit-learn
+    - scipy
+    - matplotlib
+    - seaborn
+    - pillow
+    - tqdm
+    - ipykernel
+    - pip:
+        - tensorflow-macos
+        - tensorflow-metal
+        - jaxlib
+        - jax
