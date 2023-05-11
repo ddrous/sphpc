@@ -1,15 +1,15 @@
 from setuptools import setup
 
 setup(
-   name='Scale',
+   name='sphpc',
    version='0.1.0',
-   author='desmondous',
+   author='ddrous',
    author_email='desmond.ngueguin@gmail.com',
-   packages=['scale', 'scale.tests'],
+   packages=['sphpc', 'sphpc.tests'],
 #    scripts=['bin/script1','bin/script2'],
-   url='http://pypi.python.org/pypi/Scale/',
+   url='http://pypi.python.org/pypi/sphpc/',
    license='LICENSE.md',
-   description='Simulator and controller for adjacency-based large equations',
+   description='AI-enabled simulator and controller for high performance smoothed particles hydrodynamics',
    long_description=open('README.md', encoding="utf-8").read(),
    install_requires=[
        "jax >= 0.3.4",

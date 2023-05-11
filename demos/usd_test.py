@@ -79,6 +79,7 @@ print("Matrix:", mat)
 
 # points = np.hstack((points, np.zeros((points.shape[0], 1)))) @ mat[:,:-1]
 print("type", type(points))
+print("äll atributes", dir(points), np.array(points).shape, points.__len__())
 
 points = [world_transform.Transform(points[i]) for i in range(np.array(points).shape[0])]
 

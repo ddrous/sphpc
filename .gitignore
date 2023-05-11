@@ -7,7 +7,7 @@
 *.npz
 .cache
 .DS_Store
-Scale.egg-info/*
+sphpc.egg-info/*
 scripts/reports/*
 !scripts/reports/README.md
 runs/*
