@@ -43,7 +43,7 @@ DAMPING_COEFFICIENT = - 0.9
 CONSTANT_FORCE = np.array([[0.0, 0.0, -0.1]])
 
 TIME_STEP_LENGTH = 0.01
-N_TIME_STEPS = 2_500
+N_TIME_STEPS = 2_50
 ADD_PARTICLES_EVERY = 50
 
 FIGURE_SIZE = (4, 6)
@@ -68,6 +68,7 @@ P2 = 2
 
 
 
+
 # Create geometry from cube or usda file
 geometry = USDAGeom("data/meshes/glass.usda")
 
@@ -85,6 +86,9 @@ viscosity_kernel = ViscousKernel(SMOOTHING_LENGTH, NORMALIZATION_VISCOUS_FORCE)
 bd_positions = geometry.boundaries[0].points
 boundary_model = LennardJonesModel(INFLUENCE_RANGE, REFERENCE_POTENTIAL, P1, P2)
 
+
+plt.style.use("dark_background")
+plt.figure(figsize=FIGURE_SIZE, dpi=160)
 
 for iter in tqdm(range(N_TIME_STEPS)):
 
@@ -124,6 +128,7 @@ for iter in tqdm(range(N_TIME_STEPS)):
     positions, velocities = euler_explicit_advection(positions, velocities, forces, TIME_STEP_LENGTH)
 
     # positions, velocities = enforce_boundary_conditions(geometry.boundary, DAMPING_COEFFICIENT)
+
 
     ## Plot or write to OpenVDB file
     if iter % PLOT_EVERY == 0:

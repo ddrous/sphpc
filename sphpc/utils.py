@@ -96,9 +96,6 @@ def find_neighbours(positions, query_positions, smoothing_length):
 def visualize_flow(plt, positions, bd_positions, dot_size, fig_size):
     """ Visualize the flow in matplotlib """
 
-    plt.style.use("dark_background")
-    plt.figure(figsize=fig_size, dpi=160)
-
     plt.scatter(
         positions[:, 0],
         positions[:, 2],
