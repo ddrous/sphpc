@@ -43,7 +43,7 @@ DAMPING_COEFFICIENT = - 0.9
 CONSTANT_FORCE = np.array([[0.0, 0.0, -0.1]])
 
 TIME_STEP_LENGTH = 0.01
-N_TIME_STEPS = 2_50
+N_TIME_STEPS = 2_5
 ADD_PARTICLES_EVERY = 50
 
 FIGURE_SIZE = (4, 6)
@@ -58,7 +58,7 @@ NORMALIZATION_VISCOUS_FORCE = (45 * DYNAMIC_VISCOSITY * PARTICLE_MASS) / (np.pi 
 
 
 INFLUENCE_RANGE = 0.5
-REFERENCE_POTENTIAL = 5 * 1 * 9.81 * 1  ## See Voileu. 2012, equation (6.156)
+REFERENCE_POTENTIAL = 5 * 1 * 9.81 * 1e-10  ## See Voileu. 2012, equation (6.156)
 P1 = 4
 P2 = 2
 
@@ -70,7 +70,8 @@ P2 = 2
 
 
 # Create geometry from cube or usda file
-geometry = USDAGeom("data/meshes/glass.usda")
+geometry = USDAGeom("meshes/glass.usda")
+geometry.visualize()
 
 # Create arrays for position, velocity, and forces
 positions, velocities = add_particles(geometry.boundaries[0], nb_particles=0)

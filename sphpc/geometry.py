@@ -104,15 +104,18 @@ class USDAGeom(SPHGeom):
 
 
 
-    def visualize(self):
+    def visualize(self, how="mpl"):
         """
         visualize the geometry in usdview if available, otherwise use matplotlib
         """
-        import os
-        print("Running comand: 'usdview' "+self.filename)
-        exit_status = os.system("usdview "+self.filename)
+        exit_status = 0
 
-        if exit_status != 0:
+        if how=="usdview":
+            import os
+            print("Running comand: 'usdview' "+self.filename)
+            exit_status = os.system("usdview "+self.filename)
+
+        if how=="matplotlib" or exit_status != 0:
             print("usdview not available, using matplotlib")
             fig = plt.figure()
             ax = fig.add_subplot(projection='3d')
@@ -129,7 +132,8 @@ class USDAGeom(SPHGeom):
             ax.set_ylabel('Y')
             ax.set_zlabel('Z')
             # plt.legend()
-            plt.show()
+            # plt.show()
+            return ax
 
 
 

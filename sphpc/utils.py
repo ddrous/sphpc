@@ -1,6 +1,7 @@
 import os, random
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def random_name(length=5):
     "Make random names to identify runs"
@@ -17,9 +18,10 @@ def make_dir(path):
     os.mkdir(path)
 
 
-# plt.style.use('bmh')
-# sns.set(context='notebook', style='ticks',
-#         font='sans-serif', font_scale=1, color_codes=True, rc={"lines.linewidth": 2})
+plt.style.use('bmh')
+sns.set(context='notebook', style='ticks',
+        font='sans-serif', font_scale=1, color_codes=True, rc={"lines.linewidth": 2})
+plt.style.use("dark_background")
 
 ## Wrapper function for matplotlib and seaborn
 def plot(*args, ax=None, figsize=(6,3.5), x_label=None, y_label=None, title=None, y_scale='linear', **kwargs):
@@ -103,13 +105,13 @@ def visualize_flow(plt, positions, bd_positions, dot_size, fig_size):
         c=positions[:, 2],
         cmap="Wistia_r",
     )
-    plt.ylim(np.max(bd_positions[:,2]))
-    plt.xlim(np.max(bd_positions[:,0]))
-    plt.xticks([], [])
-    plt.yticks([], [])
+    # plt.xlim(np.max(bd_positions[:,0]))
+    # plt.ylim(np.max(bd_positions[:,2]))
+    # plt.xticks([], [])
+    # plt.yticks([], [])
     plt.tight_layout()
     plt.draw()
-    plt.pause(0.0001)
+    plt.pause(1e-4)
     plt.clf()
 
     return plt
