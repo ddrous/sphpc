@@ -115,3 +115,60 @@ def visualize_flow(plt, positions, bd_positions, dot_size, fig_size):
     plt.clf()
 
     return plt
+
+
+def visualise_sph_trajectory(trajs, vels, videoname, duration=10, vmin=None, vmax=None):
+
+    import pyvista as pv
+    # pv.start_xvfb()    ## To avoid seg fault in X-server
+    pv.set_plot_theme("document")
+    sargs = dict(height=0.25, width=0.035, vertical=True)
+    pv.global_theme.font.size = 16
+    pv.global_theme.font.label_size = 11
+
+
+    speeds = np.linalg.norm(vels, axis=-1)
+
+    mesh = pv.wrap(trajs[0])
+    mesh.point_data["traj"] = trajs[0]
+    mesh.point_data["speeds"] = speeds[0]
+
+    plt = pv.Plotter()
+    # Open a movie file
+    nbframes = trajs.shape[0]
+    plt.open_movie(videoname, framerate=nbframes/duration)
+
+    # Add initial mesh
+    if vmin==None:
+        vmin = np.min(speeds)
+    if vmax==None:
+        vmax = np.max(speeds)
+
+
+    plt.add_mesh(mesh, scalars="speeds", clim=[vmin, vmax], render_points_as_spheres=True, point_size=5, show_scalar_bar=True, scalar_bar_args=sargs, cmap="coolwarm")
+
+    # plt.view_xy()
+
+    plt.show_grid()
+    plt.show_axes()
+
+    x_max, y_max, z_max = np.max(trajs[:,:,0]), np.max(trajs[:,:,1]), np.max(trajs[:,:,2])
+
+    plt.camera_position = [(2*x_max, -2.1*y_max, 2*z_max), (x_max/2., y_max/2., z_max/2.4), (0.0, 0.0, 0.1)]
+
+    plt.show(auto_close=False)  # only necessary for an off-screen movie
+
+    # Run through each frame
+    plt.write_frame()  # write initial data
+
+
+    # Update scalars on each frame
+    for i in range(nbframes):
+        ### Make sure field[i] is properly orderd first
+        mesh.point_data["trajs"] = trajs[i]
+        mesh.point_data["speeds"] = speeds[i]
+        plt.add_text(f"Frame: {i+1} / {nbframes}", name='time-label', font_size=14, shadow=True, font='courier', position='upper_right')
+        plt.write_frame()  # Write this frame
+
+    # Be sure to close the plotter when finished
+    plt.close()

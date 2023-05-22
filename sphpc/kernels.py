@@ -26,6 +26,23 @@ class WendellKernel(SPHKernel):
 
 
 
+# class CubicKernel(SPHKernel):
+#     def __init__(self, smoothing_length, normalisation_constant):
+#         super().__init__(smoothing_length, normalisation_constant)
+    
+#     def apply(self, distances, neighbor_ids):
+#         """ Calculate the density of each particle """
+#         nb_particles = distances.shape[0]
+#         densities = np.zeros(nb_particles)
+
+#         for i in range(nb_particles):
+#             for j_in_list, j in enumerate(neighbor_ids[i]):
+#                 q = distances[i][j_in_list] / self.smoothing_length
+#                 if q <= 1:
+#                     tmp = -(1 - q)
+
+#         return densities
+
 
 class Poly6Kernel(SPHKernel):
     def __init__(self, smoothing_length, normalisation_constant):

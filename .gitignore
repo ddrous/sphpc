@@ -18,3 +18,5 @@ demos/data/*
 *msh
 *vtk
 quadqs_statistics.json
+demos/01_learning_sdf/data/*
+demos/02_learning_sph/data/*

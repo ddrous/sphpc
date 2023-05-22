@@ -14,22 +14,32 @@ class SPHGeom:
 
 
 
+class CubeGeom(SPHGeom):
 
+    def __init__(self, x_lim=2*np.pi, y_lim=2*np.pi, z_lim=2*np.pi, halfres=None):
+        super().__init__()
+        self.x_lim = x_lim
+        self.y_lim = y_lim
+        self.z_lim = z_lim
 
+        if halfres is not None:
+            self.init_meshgrid(halfres)
 
+    def init_meshgrid(self, halfres):
+        """
+        produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
+        """
+        x_ = np.linspace((self.x_lim/(2**halfres)), self.x_lim, 2*halfres, endpoint=True)
+        y_ = np.linspace((self.y_lim/(2**halfres)), self.y_lim, 2*halfres, endpoint=True)
+        z_ = np.linspace((self.y_lim/(2**halfres)), self.z_lim, 2*halfres, endpoint=True)
 
+        meshgrid = np.meshgrid(x_, y_, z_, indexing='ij')
 
+        self.meshgrid = np.array(meshgrid).T.reshape(-1,3)
+        self.N = self.meshgrid.shape[0]
 
-# class CubeGeom(SPHGeom):
-#     def __init__(self, DOMAIN_WIDTH, DOMAIN_HEIGHT):
-#         domain_x_lim = np.array([
-#             SMOOTHING_LENGTH,
-#             geometry.boundary.xmax - SMOOTHING_LENGTH,
-#         ])
-#         domain_y_lim = np.array([
-#             SMOOTHING_LENGTH,
-#             geometry.ymax - SMOOTHING_LENGTH,
-#         ])
+        return self.meshgrid
+
 
 
 
