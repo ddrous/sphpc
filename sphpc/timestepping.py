@@ -8,6 +8,5 @@ def euler_explicit_advection(positions, velocities, forces, dt):
 
 def half_verlet_scheme(X, V, F, dt):
     """ Verlet time stepping scheme """
-    V += 0.5 * dt * F
-    X += dt * V
-    return X, V
+    Vnew = V + 0.5 * dt * F
+    return X + dt*Vnew, Vnew

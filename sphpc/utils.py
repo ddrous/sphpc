@@ -79,20 +79,9 @@ def add_particles(geometry_source, velocities=None, nb_particles=1):
     return positions, velocities
 
 
-def find_neighbours(positions, query_positions, smoothing_length):
-    """ Find the neighbours of each particle """
-    from sklearn import neighbors
 
-    neighbor_ids, distances = neighbors.KDTree(
-        positions,
-    ).query_radius(
-        query_positions,
-        smoothing_length,
-        return_distance=True,
-        sort_results=True,
-    )
 
-    return neighbor_ids, distances
+
 
 
 def visualize_flow(plt, positions, bd_positions, dot_size, fig_size):
@@ -117,58 +106,96 @@ def visualize_flow(plt, positions, bd_positions, dot_size, fig_size):
     return plt
 
 
-def visualise_sph_trajectory(trajs, vels, videoname, duration=10, vmin=None, vmax=None):
+def visualise_sph_trajectory(trajs, scals, videoname, duration=10, domain_lim=None, vmin=None, vmax=None):
 
     import pyvista as pv
     # pv.start_xvfb()    ## To avoid seg fault in X-server
     pv.set_plot_theme("document")
-    sargs = dict(height=0.25, width=0.035, vertical=True)
-    pv.global_theme.font.size = 16
-    pv.global_theme.font.label_size = 11
+
+    scalars_name = scals[0]
+    scalars = scals[1]
+
+    # Min and max for scalar bar
+    if vmin==None:
+        vmin = np.min(scalars)
+    if vmax==None:
+        vmax = np.max(scalars)
+
+    if domain_lim is None:
+        x_max, y_max, z_max = np.max(trajs[:,:,0]), np.max(trajs[:,:,1]), np.max(trajs[:,:,2])
+    else:
+        x_max, y_max, z_max = domain_lim, domain_lim, domain_lim
+
+    ## New camera position and focus on the center of the domain
+    cam_pos = [(2*x_max, -2.1*y_max, 2*z_max), (x_max/2., y_max/2., z_max/2.4), (0.0, 0.0, 0.1)]
 
 
-    speeds = np.linalg.norm(vels, axis=-1)
+    ## Scalar bar arguments
+    sbar_args = dict(height=0.25, width=0.035, 
+                 vertical=True, 
+                 position_x=0.9, position_y=0.4,
+                 title=scalars_name,
+                 title_font_size=22,
+                 label_font_size=12,
+                 shadow=True,
+                 font_family="times")
+
+    ## Mesh args
+    mesh_args = dict(clim=[vmin, vmax],
+                    scalars="speed", 
+                    render_points_as_spheres=True,
+                    point_size=5, 
+                    show_scalar_bar=scalars_name!="", scalar_bar_args=sbar_args, 
+                    cmap="coolwarm")
+
+    ## Arguments for the grid wrapping the args
+    grid_args = dict(bounds=[0., domain_lim, 0., domain_lim, 0., domain_lim],
+                     grid="front",
+                     xtitle="", 
+                     ytitle="", 
+                     ztitle="")
+
+    ## Text arguments to be added to each frame
+    text_args = dict(name='time-label', 
+                    font_size=14, 
+                    shadow=True, 
+                    font='courier', 
+                    position='lower_right')
 
     mesh = pv.wrap(trajs[0])
-    mesh.point_data["traj"] = trajs[0]
-    mesh.point_data["speeds"] = speeds[0]
+    mesh.points = trajs[0]
+    mesh.point_data["speed"] = scalars[0]
 
-    plt = pv.Plotter()
+
+    pl = pv.Plotter()
+
     # Open a movie file
     nbframes = trajs.shape[0]
-    plt.open_movie(videoname, framerate=nbframes/duration)
+    pl.open_movie(videoname, framerate=(nbframes-1)/duration)
 
-    # Add initial mesh
-    if vmin==None:
-        vmin = np.min(speeds)
-    if vmax==None:
-        vmax = np.max(speeds)
+    pl.add_text(f"Frame: {1} / {nbframes}", **text_args)
+    pl.add_mesh(mesh, **mesh_args)
+    pl.show_grid(**grid_args)
+    pl.show_axes()
 
+    # pl.enable_eye_dome_lighting()
+    # pl.show(auto_close=False)  # only necessary for an off-screen movie
 
-    plt.add_mesh(mesh, scalars="speeds", clim=[vmin, vmax], render_points_as_spheres=True, point_size=5, show_scalar_bar=True, scalar_bar_args=sargs, cmap="coolwarm")
+    pl.show(auto_close=False, cpos=cam_pos)  # necessary for notebook inline plotting
 
-    # plt.view_xy()
+    # Write the initial frame
+    pl.write_frame()
 
-    plt.show_grid()
-    plt.show_axes()
+    # Update coordinates and scalars on each frame
+    for i in range(1, nbframes):
 
-    x_max, y_max, z_max = np.max(trajs[:,:,0]), np.max(trajs[:,:,1]), np.max(trajs[:,:,2])
+        mesh.points[...] = trajs[i]
+        mesh.point_data["speed"] = scalars[i]
+ 
+        # pl.add_text(f"Frame: {i+1} / {nbframes}", **text_args)
+        pl.add_text("Frame: %3d / %3d"%(i+1, nbframes), **text_args)
+        pl.show_grid(**grid_args)
 
-    plt.camera_position = [(2*x_max, -2.1*y_max, 2*z_max), (x_max/2., y_max/2., z_max/2.4), (0.0, 0.0, 0.1)]
+        pl.write_frame()
 
-    plt.show(auto_close=False)  # only necessary for an off-screen movie
-
-    # Run through each frame
-    plt.write_frame()  # write initial data
-
-
-    # Update scalars on each frame
-    for i in range(nbframes):
-        ### Make sure field[i] is properly orderd first
-        mesh.point_data["trajs"] = trajs[i]
-        mesh.point_data["speeds"] = speeds[i]
-        plt.add_text(f"Frame: {i+1} / {nbframes}", name='time-label', font_size=14, shadow=True, font='courier', position='upper_right')
-        plt.write_frame()  # Write this frame
-
-    # Be sure to close the plotter when finished
-    plt.close()
+    pl.close()
