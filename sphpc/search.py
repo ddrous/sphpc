@@ -1,8 +1,12 @@
 
-from functools import lru_cache
-import numpy as np
+from functools import lru_cache, partial
 from collections import namedtuple
 
+import numpy as np
+
+import jax
+import jax.numpy as jnp
+jax.config.update('jax_platform_name', 'cpu')
 
 ## parametrise with period = 2*pi
 def periodic_dist(x, y):
@@ -53,8 +57,9 @@ Cell = namedtuple('Cell', ['id', 'neighbors'])
 def compute_id(i, j, k, n_cells):
     return i + j*n_cells + k*n_cells*n_cells
 
-@lru_cache(maxsize=None)
-def construct_cells(n):
+# @lru_cache(maxsize=None)
+def construct_cells_for_nn_search(d_lim, h):
+  n = int(np.ceil(d_lim/h))
 
   cells = {}
   for k in range(n):
@@ -73,44 +78,30 @@ def construct_cells(n):
   return cells
 
 
+
+## This can be easily vectorised
+def find_cell_for_point(x, h, n):
+  return compute_id(int(x[0]/h), int(x[1]/h), int(x[2]/h), n)
+
 """
 @Brief: This function computes the neighbors of each particle in a periodic domain
 @Input: X: (N, 3) array of  particles positions at wich we query
 @d_lim: period of the cubic domain
 @h: query radius
 """
-def periodic_fixed_radius_nearest_neighbor(X, d_lim, h):
+def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
 
-  N = X.shape[0]               ## number of particles
+  N = X.shape[0]                        ## number of particles
   n = int(np.ceil(d_lim/h))             ## number of grid cells in each direction
-
-  ## This can be easily vectorised
-  def find_cell(x):
-    return compute_id(int(x[0]/h), int(x[1]/h), int(x[2]/h), n)
-  # find_cell_vec = np.vectorize(find_cell) ## TODO: vectorise this
-
-  cells = construct_cells(n)
 
   points_to_cells = []
   for i in range(N):
-    points_to_cells.append(find_cell(X[i]))
+    points_to_cells.append(find_cell_for_point(X[i], h, n))
   points_to_cells = np.array(points_to_cells)
-
-  def cell_to_points_func(cell_id, points_to_cells):
-    return list(np.argwhere(points_to_cells==cell_id)[:,0])
 
   cells_to_points = {}
   for cell in cells.values():
-    cells_to_points[cell.id] = cell_to_points_func(cell.id, points_to_cells)
-
-
-  def distance(x, y):
-    diff1 = np.abs(x[0] - y[0])
-    diff2 = np.abs(x[1] - y[1])
-    diff3 = np.abs(x[2] - y[2])
-    return np.sqrt(np.min([diff1, d_lim-diff1])**2 +\
-					np.min([diff2, d_lim-diff2])**2  +\
-					np.min([diff3, d_lim-diff3])**2	)
+    cells_to_points[cell.id] = np.argwhere(points_to_cells==cell.id)[:,0]
 
   neighbor_points = []
   neighbor_dists = []
@@ -122,14 +113,160 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h):
     nei_dists = []
     for cell_id in neighbor_cells:
 
-      ## Avoid the below with vectorisation  ## TODO
       for j in cells_to_points[cell_id]:
-        d = distance(X[i], X[j])
+        d = distance(X[i], X[j], d_lim)
         if d <= h and j != i:
           nei_ids.append(j)
           nei_dists.append(d)
 
     neighbor_points.append(nei_ids)
     neighbor_dists.append(nei_dists)
+
+  return neighbor_points, neighbor_dists
+
+
+
+
+# def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
+
+#   N = X.shape[0]               ## number of particles
+#   n = int(np.ceil(d_lim/h))             ## number of grid cells in each direction
+
+#   ## This can be easily vectorised
+#   def find_cell(x):
+#     return compute_id(int(x[0]/h), int(x[1]/h), int(x[2]/h), n)
+#   # find_cell_vec = np.vectorize(find_cell) ## TODO: vectorise this
+
+#   # cells = construct_cells(n)
+
+#   points_to_cells = []
+#   for i in range(N):
+#     points_to_cells.append(find_cell(X[i]))
+#   points_to_cells = np.array(points_to_cells)
+
+#   def cell_to_points_func(cell_id, points_to_cells):
+#     return list(np.argwhere(points_to_cells==cell_id)[:,0])
+
+#   cells_to_points = {}
+#   for cell in cells.values():
+#     cells_to_points[cell.id] = cell_to_points_func(cell.id, points_to_cells)
+
+
+#   def distance(x, y):
+#     diff1 = np.abs(x[0] - y[0])
+#     diff2 = np.abs(x[1] - y[1])
+#     diff3 = np.abs(x[2] - y[2])
+#     return np.sqrt(np.min([diff1, d_lim-diff1])**2 +\
+# 					np.min([diff2, d_lim-diff2])**2  +\
+# 					np.min([diff3, d_lim-diff3])**2	)
+
+#   neighbor_points = []
+#   neighbor_dists = []
+
+#   for i in range(N):
+#     neighbor_cells = cells[points_to_cells[i]].neighbors
+
+#     nei_ids = []
+#     nei_dists = []
+#     for cell_id in neighbor_cells:
+
+#       ## Avoid the below with vectorisation  ## TODO
+#       for j in cells_to_points[cell_id]:
+#         d = distance(X[i], X[j])
+#         if d <= h and j != i:
+#           nei_ids.append(j)
+#           nei_dists.append(d)
+
+#     neighbor_points.append(nei_ids)
+#     neighbor_dists.append(nei_dists)
+
+#   return neighbor_points, neighbor_dists
+
+
+
+# @partial(jax.jit, static_argnames=('n',))
+# @lru_cache(maxsize=None)
+def construct_cells_for_nn_search_jax(d_lim, h):
+
+  n = int((d_lim / h) + ((d_lim % h) != 0))
+  cells = jnp.zeros((n*n*n, 27), dtype=jnp.int32)
+
+  for k in range(n):
+    for j in range(n):
+      for i in range(n):
+        cell_id = compute_id(i,j,k, n)
+
+        neighbors = []
+        for k_ in (k-1, k, k+1):
+          for j_ in (j-1, j, j+1):
+            for i_ in (i-1, i, i+1):
+              neighbors.append(compute_id(i_%n, j_%n, k_%n, n))
+
+        cells.at[cell_id].set(jnp.array(neighbors))
+
+  return cells
+
+
+
+
+
+
+## This can be easily vectorised
+def find_cell(x, h, n):
+  return jnp.array(compute_id(x[0]/h, x[1]/h, x[2]/h, n), dtype=int)
+find_cell_vec = jax.vmap(find_cell, in_axes=(0, None, None), out_axes=0)
+
+
+def distance(x, y, d_lim):   ## TODO: tensorise this
+  diff = jnp.abs(x-y)
+  diff_min = jnp.min(jnp.vstack((diff, d_lim-diff)).T, axis=-1)
+  return jnp.sqrt(jnp.sum(diff_min**2, axis=0))
+distance_vec = jax.vmap(distance, in_axes=(None,0, None), out_axes=0)
+
+
+# @partial(jax.jit, static_argnames=('h', 'X', 'cells_to_points'))
+# @jax.jit
+def find_neighbours_of_i_in_cell(i, cell_id, X, cells_to_points, h):
+  neigh_ids = cells_to_points[cell_id]
+  neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)] ## remove the -1s (see argwhere) and the self
+
+  neigh_dists = distance_vec(X[i], X[neigh_ids])
+
+  return neigh_ids[neigh_dists <= h], neigh_dists[neigh_dists <= h]
+
+
+
+
+def periodic_fixed_radius_nearest_neighbor_jax(X, d_lim, h, cells):
+
+  N = X.shape[0]               ## number of particles
+  # n = jnp.ceil(d_lim/h).astype(int)             ## number of grid cells in each direction
+  n = int((d_lim / h) + ((d_lim % h) != 0))              ## number of grid cells in each direction
+
+  points_to_cells = find_cell_vec(X, h, n)
+
+  cells_to_points = {}
+  for cell_id in range(n*n*n):
+    tmp1 = jnp.argwhere(points_to_cells==cell_id, size=N, fill_value=-1)[:,0]   ## NOTE: argwhere is data dependent, so we need to specify the size
+    tmp2 = jnp.sum(points_to_cells==cell_id)
+    cells_to_points[cell_id] = tmp1[:tmp2]
+
+  neighbor_points = []
+  neighbor_dists = []
+
+  for i in range(N):
+    neighbor_cells = cells[points_to_cells[i]]
+
+    for cell_id in neighbor_cells:
+
+      neigh_ids = cells_to_points[int(cell_id)]
+
+      # neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)] ## remove the -1s (see argwhere above) and the self
+      neigh_ids = neigh_ids[neigh_ids != i]
+
+      neigh_dists = distance_vec(X[i], X[neigh_ids], d_lim)
+
+    neighbor_points.append(np.asarray(neigh_ids[neigh_dists <= h]))
+    neighbor_dists.append(np.asarray(neigh_dists[neigh_dists <= h]))
 
   return neighbor_points, neighbor_dists

@@ -1,5 +1,6 @@
 # %%
 import numpy as np
+from tqdm import tqdm
 
 from sphpc import *
 
@@ -14,8 +15,9 @@ IC = "Vrandn"         ## TODO Change this and add proper Taylor-Green IC
 # method = "AV_neg_rel" 
 
 T = 400
-t_save = 1   #initial time for saving
-vmag = 1.0   #initial magnitude of Taylor-Green velocity
+T_SAVE = 1   #initial time for saving
+PRINT_EVERY = 10
+V_INIT = 1.0   #initial magnitude of Taylor-Green velocity
 
 c = 0.9157061661168617
 h = 0.2
@@ -29,9 +31,9 @@ pi = np.pi
 D_LIM = 2*pi    ## domain limit accors all axis
 
 D = 3
-halfres = 15; #produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
+HALF_RES = 15;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
 
-cube = CubeGeom(x_lim=D_LIM, y_lim=D_LIM, z_lim=D_LIM, halfres=halfres)
+cube = CubeGeom(x_lim=D_LIM, y_lim=D_LIM, z_lim=D_LIM, halfres=HALF_RES)
 
 N = cube.meshgrid.shape[0]
 m = (D_LIM)**D / N       ## constant mass of each particle
@@ -49,7 +51,7 @@ def W(r, h):
     return 0
   if (q > 1.):
     return (sigma * (2. - q)**3 / 4.)
-  return (sigma * (1. - 1.5 * q * q * (1. - q / 2.)))   ## ERROR in
+  return (sigma * (1. - 1.5 * q * q * (1. - q / 2.)))
 
 # H(r) = (d W / d r) / r
 # Remember: dW(r)/dr = r \times H(r) is a vector
@@ -121,17 +123,12 @@ def compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c):
         while (Xij[d] < -D_LIM/2.): Xij[d] += D_LIM
       Πij = compute_Π(Xij, Vij, ρ[i], ρ[j], α, β, h, c)
 
-      # Πij = 0.    ## TODO Delete US
-      # Xij = 0.
-
       ## Add up all forces
       valj = P(ρ[j]) / (ρ[j]**2)
 
       # vali, valj = 1e-2, 1e-2   ## TODO Delete US
 
       F[i] += -m*(vali + valj + Πij) * H(distances[i][j_], h) * Xij ## No external forces for now TODO Add later
-
-      # F[i] = np.maximum(np.minimum(F[i], 1*np.ones(3)), -1*np.ones(3))   ## TODO Remove this line
 
   ke = 0.5 * np.mean(ρ * np.sum(V**2, axis=-1))
 
@@ -140,8 +137,15 @@ def compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c):
 
   return F
 
+def check_nans(X, V, ρ):
+  print(f"Min Max of X: {np.min(X):.2} {np.max(X):.2}", f"\t\tMin Max of V: {np.min(V):.2} {np.max(V):.2}")
 
-## %%
+  if (np.any(np.isnan(X)) or np.any(np.isnan(V)) or np.any(np.isnan(ρ))):
+    print("NaNs found in X, V, or ρ")
+    exit(1)
+
+
+# %%
 
 ## Algorithm begins here
 
@@ -150,7 +154,7 @@ print("**************** Simulating the particle flow ***************")
 X = cube.meshgrid + 0.0005 * (np.random.uniform(0., 1., size=cube.meshgrid.shape) - 0.5)
 X = np.mod(X, D_LIM)
 
-V = vmag * np.random.normal(0., 1., size=X.shape)
+V = V_INIT * np.random.normal(0., 1., size=X.shape)
 
 trajs, vels = np.zeros((T+1, N, D)), np.zeros((T+1, N, D))
 
@@ -159,58 +163,35 @@ trajs[0:, :, :] = X
 vels[0:, :, :] = V
 
 rhos = np.zeros((T+1, N))
+
 # neighbor_ids, distances = find_neighbours(X, X, h)
-neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h)
+
+
+cells = construct_cells_for_nn_search(D_LIM, h)
+neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h, cells)
+
+# cells = construct_cells_for_nn_search_jax(D_LIM, h)
+# neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor_jax(X, D_LIM, h, cells)
+
 ρ = compute_densities(neighbor_ids, distances, h)
 rhos[0, :] = ρ
 
 
-for t in range(1, T+1):
+for t in tqdm(range(1, T+1)):
 
-  ## TODO Find neighbours in a periodic way: hash table
   # neighbor_ids, distances = find_neighbours(X, X, h)
-  neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h)
+  neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h, cells)
+  # neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor_jax(X, D_LIM, h, cells)
 
   ρ = compute_densities(neighbor_ids, distances, h)
   F = compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c)
-
-  Vbef = np.copy(V)
 
   ## Verlet advection scheme part 1
   X, V = half_verlet_scheme(X, V, F, dt)
   X = np.mod(X, D_LIM)
 
-  if (np.isnan(X).any()):
-    print("XXXXXXXXXXXXXXX \n\n\n")
-    print(X[np.isnan(X[:,0])])
-    nanpos = np.argwhere(np.isnan(X))
-    print(nanpos)
-
-    print("vbef\n", Vbef[nanpos[:, 0][::3]])
-    print("vels\n", V[nanpos[:, 0][::3]])
-    print("force\n", F[nanpos[:, 0][::3]])
-
-    print("rho", ρ[ρ<0])
-    print("forever dt", dt)
-    break
-
-
-  if (np.isnan(V).any() or np.isinf(V).any()):
-    print("VVVVVVVVVVVV \n\n\n")
-
-    print(V[np.isinf(V[:,0])])
-    nanpos = np.argwhere(np.isinf(V))
-    print(nanpos)
-
-    print("X\n", X[nanpos[:, 0][::3]])
-    print("vels\n", V[nanpos[:, 0][::3]])
-    print("force\n", F[nanpos[:, 0][::3]])
-
-    print("rho", ρ[ρ<0])
-    print("forever dt", dt)
-
-    break
-
+  ## Check nans before continuing
+  # check_nans(X, V, ρ)
 
   ρ = compute_densities(neighbor_ids, distances, h)
   F = compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c)
@@ -222,9 +203,11 @@ for t in range(1, T+1):
   trajs[t, :, :] = X
   vels[t, :, :] = V
 
-  print("Time step: ", t, "\tMax vels: ", np.max(V), "\tMin vels: ", np.min(V))
+  # if (t % PRINT_EVERY == 0):
+  #   print(f"Time step: ", t)
 
 print("****************  Simulation COMPLETE  *************")
+
 
 # %%
 
@@ -249,22 +232,19 @@ print("****************  Visualisation COMPLETE  *************")
 
 ## Save files
 
-
 # print(" ****************** Saving data files ***********************")
 
-# pos_path = DATAFOLDER+f"trajs_N{N}_T{T}_dt{dt}_ts{t_save}_h{h}_{IC}_θ{θ}.npy"
-# vel_path = DATAFOLDER+f"vels_N{N}_T{T}_dt{dt}_ts{t_save}_h{h}_{IC}_θ{θ}.npy"
-# rho_path = DATAFOLDER+f"rhos_N{N}_T{T}_dt{dt}_ts{t_save}_h{h}_{IC}_θ{θ}.npy"
+# pos_path = DATAFOLDER+f"trajs_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
+# vel_path = DATAFOLDER+f"vels_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
+# rho_path = DATAFOLDER+f"rhos_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
 
-# np.save(pos_path, trajs[t_save:,:,:])
-# np.save(vel_path, vels[t_save:,:,:])
-# np.save(rho_path, rhos[t_save:,:])
+# np.save(pos_path, trajs[T_SAVE:,:,:])
+# np.save(vel_path, vels[T_SAVE:,:,:])
+# np.save(rho_path, rhos[T_SAVE:,:])
 
 # print("****************  Saving COMPLETE  *************")
 
 
 
-print(np.max(vels), np.min(vels))
 
 # %%
-
