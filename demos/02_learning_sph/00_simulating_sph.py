@@ -11,36 +11,41 @@ DATAFOLDER = "./data/" + EXPERIMENET_ID +"/"
 
 #params:
 
-IC = "Vrandn"         ## TODO Change this and add proper Taylor-Green IC
+IC = "taylor-green"         ## Taylor-Green IC
+# IC = "random"         ## TODO Change this and add proper Taylor-Green IC
 # method = "AV_neg_rel" 
 
-T = 400
-T_SAVE = 1   #initial time for saving
+T = 5
+T_SAVE = 0   #initial time for saving
 PRINT_EVERY = 10
-V_INIT = 1.0   #initial magnitude of Taylor-Green velocity
 
+V_INIT = 1.0   #initial magnitude of Taylor-Green velocity
 c = 0.9157061661168617
 h = 0.2
 α = 0.45216843078299573
 β = 0.3346233846532608
-γ = 1                     ## TODO Equal 7 in the paper (see fig 1)
+γ = 1.0                     ## TODO Equal 7 in the paper (see fig 1)
 θ = 0.00430899795067121
 dt = 0.4 * h / c
 
 pi = np.pi
-D_LIM = 2*pi    ## domain limit accors all axis
+D_LIM = 2.*pi    ## domain limit accors all axis
 
 D = 3
-HALF_RES = 15;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
+HALF_RES = 5;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
 
 cube = CubeGeom(x_lim=D_LIM, y_lim=D_LIM, z_lim=D_LIM, halfres=HALF_RES)
 
 N = cube.meshgrid.shape[0]
 m = (D_LIM)**D / N       ## constant mass of each particle
 
+print("Weakly Comprissible SPH")
+print(" -Number of particles: ", N)
+print(" -Number of time steps: ", T)
+
 ## Not the same sigma as in the paper (see eq.14 Woodward 2023)
 # sigma = (10. / (7. * pi * h * h)); #2D normalizing factor
-sigma = 1/(pi*h**3)  #3D normalizing factor
+sigma = 1 / (pi * (h**3))  #3D normalizing factor
 
 
 # %%
@@ -61,7 +66,7 @@ def H(r, h):
     return 0
   if (q > 1.):
     return (-3. * sigma * (2. - q)**2 / (4. * h * r))
-  return (sigma * (-3. + 9. * q / 4.) / (h * h))  ## TODO ERROR divide by h*r, not h*h
+  return (sigma * (-3. + 9. * q / 4.) / (h * h))
 
 
 ## Equation of state
@@ -118,20 +123,17 @@ def compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c):
       ## Compute artificial viscosity
       Xij = X[i] - X[j]
       Vij = V[i] - V[j]
-      for d in range(D):
+      for d in range(D):    ## TODO Optimize this
         while (Xij[d] > D_LIM/2.): Xij[d] -= D_LIM
         while (Xij[d] < -D_LIM/2.): Xij[d] += D_LIM
       Πij = compute_Π(Xij, Vij, ρ[i], ρ[j], α, β, h, c)
 
-      ## Add up all forces
       valj = P(ρ[j]) / (ρ[j]**2)
 
-      # vali, valj = 1e-2, 1e-2   ## TODO Delete US
-
-      F[i] += -m*(vali + valj + Πij) * H(distances[i][j_], h) * Xij ## No external forces for now TODO Add later
+      ## Add up all forces
+      F[i] += -m*(vali + valj + Πij) * H(distances[i][j_], h) * Xij ## TODO External forcing?
 
   ke = 0.5 * np.mean(ρ * np.sum(V**2, axis=-1))
-
   # F += θ * V / ke
   F += θ * (V - np.mean(V, axis=0)) / (2*ke)    ## TODO Change to the above as in the paper
 
@@ -151,16 +153,25 @@ def check_nans(X, V, ρ):
 
 print("**************** Simulating the particle flow ***************")
 
-X = cube.meshgrid + 0.0005 * (np.random.uniform(0., 1., size=cube.meshgrid.shape) - 0.5)
+X = cube.meshgrid
+V = V_INIT * np.ones_like(X)
+# V[N//2:, 1] *= -1   ## Default IC: Blue particles to right, red to left
+
+if IC == "random":
+  X += 0.0005 * (np.random.uniform(0., 1., size=cube.meshgrid.shape) - 0.5)
+  V = V_INIT * np.random.normal(0., 1., size=X.shape)
+
 X = np.mod(X, D_LIM)
 
-V = V_INIT * np.random.normal(0., 1., size=X.shape)
+if IC == "taylor-green":
+  V[:, 0] = V_INIT * np.sin(X[:, 0]) * np.cos(X[:, 1]) * np.cos(X[:, 2])
+  V[:, 1] = -V_INIT * np.cos(X[:, 0]) * np.sin(X[:, 1]) * np.cos(X[:, 2])
+  V[:, 2] = 0.
 
 trajs, vels = np.zeros((T+1, N, D)), np.zeros((T+1, N, D))
 
-
-trajs[0:, :, :] = X
-vels[0:, :, :] = V
+trajs[0, :, :] = X
+vels[0, :, :] = V
 
 rhos = np.zeros((T+1, N))
 
@@ -215,8 +226,8 @@ print("**************** Visualising the particle flow ***************")
 
 speeds = np.linalg.norm(vels, axis=-1)
 
-red_blue = np.ones_like(speeds)
-red_blue[:, speeds.shape[1]//2:] = 0.0
+red_blue = np.zeros_like(speeds)
+red_blue[:, N//2:] = 1
 
 visualise_sph_trajectory(trajs, 
                         # ("Speeds", speeds),
@@ -232,19 +243,20 @@ print("****************  Visualisation COMPLETE  *************")
 
 ## Save files
 
-# print(" ****************** Saving data files ***********************")
+print(" ****************** Saving data files ***********************")
 
-# pos_path = DATAFOLDER+f"trajs_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
-# vel_path = DATAFOLDER+f"vels_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
-# rho_path = DATAFOLDER+f"rhos_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
+pos_path = DATAFOLDER+f"trajs_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
+vel_path = DATAFOLDER+f"vels_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
+rho_path = DATAFOLDER+f"rhos_N{N}_T{T}_dt{dt}_ts{T_SAVE}_h{h}_{IC}_θ{θ}.npy"
 
-# np.save(pos_path, trajs[T_SAVE:,:,:])
-# np.save(vel_path, vels[T_SAVE:,:,:])
-# np.save(rho_path, rhos[T_SAVE:,:])
+np.save(pos_path, trajs[T_SAVE:,:,:])
+np.save(vel_path, vels[T_SAVE:,:,:])
+np.save(rho_path, rhos[T_SAVE:,:])
 
-# print("****************  Saving COMPLETE  *************")
+print("****************  Saving COMPLETE  *************")
 
 
 
 
 # %%
+

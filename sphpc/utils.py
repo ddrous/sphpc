@@ -162,8 +162,8 @@ def visualise_sph_trajectory(trajs, scals, videoname, duration=10, domain_lim=No
                     font='courier', 
                     position='lower_right')
 
-    mesh = pv.wrap(trajs[0])
-    mesh.points = trajs[0]
+    mesh = pv.wrap(np.copy(trajs[0]))
+    mesh.points[...] = trajs[0]
     mesh.point_data["speed"] = scalars[0]
 
 

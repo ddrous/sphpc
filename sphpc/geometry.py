@@ -29,9 +29,9 @@ class CubeGeom(SPHGeom):
         """
         produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
         """
-        x_ = np.linspace((self.x_lim/(2**halfres)), self.x_lim, 2*halfres, endpoint=True)
-        y_ = np.linspace((self.y_lim/(2**halfres)), self.y_lim, 2*halfres, endpoint=True)
-        z_ = np.linspace((self.y_lim/(2**halfres)), self.z_lim, 2*halfres, endpoint=True)
+        x_ = np.linspace((self.x_lim/(2**halfres)), self.x_lim, 2**halfres, endpoint=True)
+        y_ = np.linspace((self.y_lim/(2**halfres)), self.y_lim, 2**halfres, endpoint=True)
+        z_ = np.linspace((self.y_lim/(2**halfres)), self.z_lim, 2**halfres, endpoint=True)
 
         meshgrid = np.meshgrid(x_, y_, z_, indexing='ij')
 
