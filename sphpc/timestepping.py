@@ -1,3 +1,6 @@
+import jax
+
+@jax.jit
 def euler_explicit_advection(positions, velocities, forces, dt):
     """ Euler time stepping scheme """
     velocities += dt * forces
@@ -5,7 +8,7 @@ def euler_explicit_advection(positions, velocities, forces, dt):
     return positions, velocities
 
 
-
+@jax.jit
 def half_verlet_scheme(X, V, F, dt):
     """ Verlet time stepping scheme """
     Vnew = V + 0.5 * dt * F

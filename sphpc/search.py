@@ -127,60 +127,60 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
 
 
 
-# def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
+def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
 
-#   N = X.shape[0]               ## number of particles
-#   n = int(np.ceil(d_lim/h))             ## number of grid cells in each direction
+  N = X.shape[0]               ## number of particles
+  n = int(np.ceil(d_lim/h))             ## number of grid cells in each direction
 
-#   ## This can be easily vectorised
-#   def find_cell(x):
-#     return compute_id(int(x[0]/h), int(x[1]/h), int(x[2]/h), n)
-#   # find_cell_vec = np.vectorize(find_cell) ## TODO: vectorise this
+  ## This can be easily vectorised
+  def find_cell(x):
+    return compute_id(int(x[0]/h), int(x[1]/h), int(x[2]/h), n)
+  # find_cell_vec = np.vectorize(find_cell) ## TODO: vectorise this
 
-#   # cells = construct_cells(n)
+  # cells = construct_cells(n)
 
-#   points_to_cells = []
-#   for i in range(N):
-#     points_to_cells.append(find_cell(X[i]))
-#   points_to_cells = np.array(points_to_cells)
+  points_to_cells = []
+  for i in range(N):
+    points_to_cells.append(find_cell(X[i]))
+  points_to_cells = np.array(points_to_cells)
 
-#   def cell_to_points_func(cell_id, points_to_cells):
-#     return list(np.argwhere(points_to_cells==cell_id)[:,0])
+  def cell_to_points_func(cell_id, points_to_cells):
+    return list(np.argwhere(points_to_cells==cell_id)[:,0])
 
-#   cells_to_points = {}
-#   for cell in cells.values():
-#     cells_to_points[cell.id] = cell_to_points_func(cell.id, points_to_cells)
+  cells_to_points = {}
+  for cell in cells.values():
+    cells_to_points[cell.id] = cell_to_points_func(cell.id, points_to_cells)
 
 
-#   def distance(x, y):
-#     diff1 = np.abs(x[0] - y[0])
-#     diff2 = np.abs(x[1] - y[1])
-#     diff3 = np.abs(x[2] - y[2])
-#     return np.sqrt(np.min([diff1, d_lim-diff1])**2 +\
-# 					np.min([diff2, d_lim-diff2])**2  +\
-# 					np.min([diff3, d_lim-diff3])**2	)
+  def distance(x, y):
+    diff1 = np.abs(x[0] - y[0])
+    diff2 = np.abs(x[1] - y[1])
+    diff3 = np.abs(x[2] - y[2])
+    return np.sqrt(np.min([diff1, d_lim-diff1])**2 +\
+					np.min([diff2, d_lim-diff2])**2  +\
+					np.min([diff3, d_lim-diff3])**2	)
 
-#   neighbor_points = []
-#   neighbor_dists = []
+  neighbor_points = []
+  neighbor_dists = []
 
-#   for i in range(N):
-#     neighbor_cells = cells[points_to_cells[i]].neighbors
+  for i in range(N):
+    neighbor_cells = cells[points_to_cells[i]].neighbors
 
-#     nei_ids = []
-#     nei_dists = []
-#     for cell_id in neighbor_cells:
+    nei_ids = []      ## TODO Don't track gradients here
+    nei_dists = []
+    for cell_id in neighbor_cells:
 
-#       ## Avoid the below with vectorisation  ## TODO
-#       for j in cells_to_points[cell_id]:
-#         d = distance(X[i], X[j])
-#         if d <= h and j != i:
-#           nei_ids.append(j)
-#           nei_dists.append(d)
+      ## Avoid the below with vectorisation  ## TODO
+      for j in cells_to_points[cell_id]:
+        d = distance(X[i], X[j])
+        if d <= h and j != i:
+          nei_ids.append(j)
+          nei_dists.append(d)
 
-#     neighbor_points.append(nei_ids)
-#     neighbor_dists.append(nei_dists)
+    neighbor_points.append(nei_ids)
+    neighbor_dists.append(nei_dists)
 
-#   return neighbor_points, neighbor_dists
+  return neighbor_points, neighbor_dists
 
 
 
@@ -189,7 +189,8 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
 def construct_cells_for_nn_search_jax(d_lim, h):
 
   n = int((d_lim / h) + ((d_lim % h) != 0))
-  cells = jnp.zeros((n*n*n, 27), dtype=jnp.int32)
+  cells = np.zeros((n*n*n, 27), dtype=jnp.int32)
+  # cells = jax.lax.stop_gradient(cells)
 
   for k in range(n):
     for j in range(n):
@@ -202,7 +203,8 @@ def construct_cells_for_nn_search_jax(d_lim, h):
             for i_ in (i-1, i, i+1):
               neighbors.append(compute_id(i_%n, j_%n, k_%n, n))
 
-        cells.at[cell_id].set(jnp.array(neighbors))
+        cells[cell_id] = jnp.array(neighbors)
+        # cells.at[cell_id].set(jnp.array(neighbors))
 
   return cells
 
@@ -235,21 +237,44 @@ def find_neighbours_of_i_in_cell(i, cell_id, X, cells_to_points, h):
   return neigh_ids[neigh_dists <= h], neigh_dists[neigh_dists <= h]
 
 
+def find_points_in_cell(cell_id, points_to_cells):
+  return jnp.argwhere(points_to_cells==cell_id, size=points_to_cells.shape[0], fill_value=-1)[:,0]
+
+find_points_in_cell_vec = jax.vmap(find_points_in_cell, in_axes=(0, None), out_axes=0)
+
+def find_points_in_cell_count(cell_id, points_to_cells):
+  return jnp.sum(points_to_cells==cell_id)
+
+find_points_in_cell_count_vec = jax.vmap(find_points_in_cell_count, in_axes=(0,None), out_axes=0)
+
+
+# def distances_from_point_i_to_cell(i, cell_id, X, cells_to_points, d_lim, h):
+#     neigh_ids = cells_to_points[cell_id, :]
+
+#     neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)] ## remove the -1s (see argwhere above) and the self
+#     # neigh_ids = neigh_ids[neigh_ids != i]
+#     neigh_dists = distance_vec(X[i], X[neigh_ids], d_lim)
+
+#     return neigh_ids[neigh_dists <= h], neigh_dists[neigh_dists <= h]
+
+# distances_from_point_i_to_cell_vec = jax.vmap(distances_from_point_i_to_cell, in_axes=(None, 0, None, None, None, None), out_axes=0)
 
 
 def periodic_fixed_radius_nearest_neighbor_jax(X, d_lim, h, cells):
 
   N = X.shape[0]               ## number of particles
   # n = jnp.ceil(d_lim/h).astype(int)             ## number of grid cells in each direction
-  n = int((d_lim / h) + ((d_lim % h) != 0))              ## number of grid cells in each direction
+  # n = int((d_lim / h) + ((d_lim % h) != 0))              ## number of grid cells in each direction
+  # nb_cells = n*n*n
 
-  points_to_cells = find_cell_vec(X, h, n)
+  nb_cells = cells.shape[0]
 
-  cells_to_points = {}
-  for cell_id in range(n*n*n):
-    tmp1 = jnp.argwhere(points_to_cells==cell_id, size=N, fill_value=-1)[:,0]   ## NOTE: argwhere is data dependent, so we need to specify the size
-    tmp2 = jnp.sum(points_to_cells==cell_id)
-    cells_to_points[cell_id] = tmp1[:tmp2]
+
+  points_to_cells = find_cell_vec(X, h, nb_cells**(1/3))
+
+  cells_to_points = find_points_in_cell_vec(np.arange(nb_cells), points_to_cells)
+
+  # cells_to_points_count = find_points_in_cell_count_vec(np.arange(nb_cells), points_to_cells)
 
   neighbor_points = []
   neighbor_dists = []
@@ -257,16 +282,22 @@ def periodic_fixed_radius_nearest_neighbor_jax(X, d_lim, h, cells):
   for i in range(N):
     neighbor_cells = cells[points_to_cells[i]]
 
-    for cell_id in neighbor_cells:
+    neigh_ids = jnp.concatenate([cells_to_points[c] for c in neighbor_cells])
+    neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)]
 
-      neigh_ids = cells_to_points[int(cell_id)]
+    neigh_dists = distance_vec(X[i], X[neigh_ids], d_lim)
 
-      # neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)] ## remove the -1s (see argwhere above) and the self
-      neigh_ids = neigh_ids[neigh_ids != i]
+    neigh_ids = neigh_ids[neigh_dists <= h]
+    neigh_dists = neigh_dists[neigh_dists <= h]
 
-      neigh_dists = distance_vec(X[i], X[neigh_ids], d_lim)
+    # neigh_ids, neigh_dists = distances_from_point_i_to_cell_vec(i, neighbor_cells, X, cells_to_points, d_lim, h)
 
-    neighbor_points.append(np.asarray(neigh_ids[neigh_dists <= h]))
-    neighbor_dists.append(np.asarray(neigh_dists[neigh_dists <= h]))
+    # neighbor_points.append(np.asarray(neigh_ids.flatten()))
+    # neighbor_dists.append(np.asarray(neigh_dists.flatten()))
+
+    neighbor_points.append(np.asarray(neigh_ids))
+    neighbor_dists.append(np.asarray(neigh_dists))
 
   return neighbor_points, neighbor_dists
+
+

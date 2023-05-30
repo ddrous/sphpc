@@ -20,3 +20,5 @@ demos/data/*
 quadqs_statistics.json
 demos/01_learning_sdf/data/*
 demos/02_learning_sph/data/*
+!demos/01_learning_sdf/data/README.md
+!demos/02_learning_sph/data/README.md
