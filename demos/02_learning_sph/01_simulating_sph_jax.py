@@ -3,6 +3,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+import cProfile, pstats, io
+from pstats import SortKey
+
 jax.config.update("jax_platform_name", "cpu")
 
 from tqdm import tqdm
@@ -44,7 +47,7 @@ cube = CubeGeom(x_lim=D_LIM, y_lim=D_LIM, z_lim=D_LIM, halfres=HALF_RES)
 N = cube.meshgrid.shape[0]
 m = (D_LIM)**D / N       ## constant mass of each particle
 
-print("Weakly Comprissible SPH")
+print("Weakly Compressible SPH")
 print(" -Number of particles: ", N)
 print(" -Number of time steps: ", T)
 
@@ -127,11 +130,10 @@ def compute_densities(distances, h):
   for i in range(N):
       ρ[i] = compute_density(distances[i], h)
 
-  return ρ
+  return np.asarray(ρ)
 
 
 ## Acceleration force
-@jax.jit
 def compute_acc_force_ij(Xij, Vij, ρi, ρj, dist, α, β, h, c):
     ## Compute artificial viscosity
     Xij_sign = jnp.sign(Xij)
@@ -175,7 +177,7 @@ def compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c):
   # F += θ * V / ke
   F += θ * (V - np.mean(V, axis=0)) / (2*ke)    ## TODO Change to the above as in the paper
 
-  return F
+  return np.asarray(F)
 
 @jax.jit
 def apply_periodic_boundary_conditions(X):
@@ -193,6 +195,10 @@ def check_nans(X, V, ρ):
 # %%
 
 ## Algorithm begins here
+
+
+pr = cProfile.Profile()
+pr.enable()
 
 print("**************** Simulating the particle flow ***************")
 
@@ -221,8 +227,11 @@ vels[0, :, :] = V
 
 rhos = np.zeros((T+1, N))
 
-cells = construct_cells_for_nn_search_jax(D_LIM, h)
-neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor_jax(X, D_LIM, h, cells)
+# cells = construct_cells_for_nn_search_jax(D_LIM, h)
+# neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor_jax(X, D_LIM, h, cells)
+
+cells = construct_cells_for_nn_search(D_LIM, h)
+neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h, cells)
 
 ρ = compute_densities(distances, h)
 rhos[0, :] = ρ
@@ -230,7 +239,8 @@ rhos[0, :] = ρ
 
 for t in tqdm(range(1, T+1)):
 
-  neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor_jax(X, D_LIM, h, cells)
+  neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h, cells)
+
 
   ρ = compute_densities(distances, h)
   F = compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c)
@@ -257,6 +267,12 @@ for t in tqdm(range(1, T+1)):
 
 print("****************  Simulation COMPLETE  *************")
 
+pr.disable()
+s = io.StringIO()
+sortby = SortKey.CUMULATIVE
+ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+ps.print_stats("search.py")
+print(s.getvalue())
 
 # %%
 

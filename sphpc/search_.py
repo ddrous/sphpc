@@ -177,11 +177,8 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
           nei_ids.append(j)
           nei_dists.append(d)
 
-    neighbor_points.append(np.array(nei_ids, dtype=int))
-    neighbor_dists.append(np.array(nei_dists, dtype=int))
-
-    # neighbor_points.append(nei_ids)
-    # neighbor_dists.append(nei_dists)
+    neighbor_points.append(nei_ids)
+    neighbor_dists.append(nei_dists)
 
   return neighbor_points, neighbor_dists
 
@@ -192,7 +189,8 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
 def construct_cells_for_nn_search_jax(d_lim, h):
 
   n = int((d_lim / h) + ((d_lim % h) != 0))
-  cells = {}
+  cells = np.zeros((n*n*n, 27), dtype=jnp.int32)
+  # cells = jax.lax.stop_gradient(cells)
 
   for k in range(n):
     for j in range(n):
@@ -257,7 +255,7 @@ def find_points_in_cell(cell_id, points_to_cells):
 
   return np.argwhere(points_to_cells==cell_id)[:,0]
 
-# find_points_in_cell_vec = jax.vmap(find_points_in_cell, in_axes=(0, None), out_axes=0)
+find_points_in_cell_vec = jax.vmap(find_points_in_cell, in_axes=(0, None), out_axes=0)
 
 def find_points_in_cell_count(cell_id, points_to_cells):
   return jnp.sum(points_to_cells==cell_id)
@@ -281,18 +279,15 @@ def periodic_fixed_radius_nearest_neighbor_jax(X, d_lim, h, cells):
 
   N = X.shape[0]               ## number of particles
   # n = jnp.ceil(d_lim/h).astype(int)             ## number of grid cells in each direction
-  n = int((d_lim / h) + ((d_lim % h) != 0))              ## number of grid cells in each direction
-  nb_cells = n*n*n
+  # n = int((d_lim / h) + ((d_lim % h) != 0))              ## number of grid cells in each direction
+  # nb_cells = n*n*n
 
-  # nb_cells = cells.shape[0]
+  nb_cells = cells.shape[0]
 
-  points_to_cells = find_cell_vec(X, h, n)
+  points_to_cells = find_cell_vec(X, h, nb_cells**(1/3))
 
-  # cells_to_points = find_points_in_cell_vec(np.arange(nb_cells), points_to_cells)
+  cells_to_points = find_points_in_cell_vec(np.arange(nb_cells), points_to_cells)
 
-  cells_to_points = {}
-  for cell_id in cells.keys():
-    cells_to_points[cell_id] = find_points_in_cell(cell_id, points_to_cells)
 
   # cells_to_points_count = find_points_in_cell_count_vec(np.arange(nb_cells), points_to_cells)
 
@@ -305,7 +300,7 @@ def periodic_fixed_radius_nearest_neighbor_jax(X, d_lim, h, cells):
     # neigh_ids = cells_to_points[neighbor_cells].flatten()
     # neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)]
 
-    neigh_ids = new_func_bachmark(cells, int(points_to_cells[i]), cells_to_points)
+    neigh_ids = new_func_bachmark(cells, points_to_cells[i], cells_to_points)
 
     neigh_dists = distance_vec(X[i], X[neigh_ids], d_lim)
 
@@ -326,9 +321,9 @@ def periodic_fixed_radius_nearest_neighbor_jax(X, d_lim, h, cells):
 def new_func_bachmark(cells, points_to_cells_i, cells_to_points):
     neighbor_cells = cells[points_to_cells_i]
 
-    neigh_ids = np.concatenate([cells_to_points[cell_id] for cell_id in neighbor_cells])
+    neigh_ids = cells_to_points[neighbor_cells].flatten()
 
-    # print("Data types:", type(neigh_ids), type(cells), type(cells_to_points))
+    print("Data types:", type(neigh_ids), type(cells), type(cells_to_points))
 
     # neigh_ids = neigh_ids[(neigh_ids > -1) & (neigh_ids != i)]
     neigh_ids = neigh_ids[(neigh_ids > -1)]

@@ -32,14 +32,14 @@ pi = np.pi
 D_LIM = 2.*pi    ## domain limit accors all axis
 
 D = 3
-HALF_RES = 5;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
+HALF_RES = 3;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
 
 cube = CubeGeom(x_lim=D_LIM, y_lim=D_LIM, z_lim=D_LIM, halfres=HALF_RES)
 
 N = cube.meshgrid.shape[0]
 m = (D_LIM)**D / N       ## constant mass of each particle
 
-print("Weakly Comprissible SPH")
+print("Weakly Compressible SPH")
 print(" -Number of particles: ", N)
 print(" -Number of time steps: ", T)
 
