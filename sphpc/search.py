@@ -115,6 +115,8 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
 
       for j in cells_to_points[cell_id]:
         d = distance(X[i], X[j], d_lim)
+        # if d>0 and i==0 and j==31:
+        #   print("d = ", d)
         if d <= h and j != i:
           nei_ids.append(j)
           nei_dists.append(d)
@@ -173,6 +175,8 @@ def periodic_fixed_radius_nearest_neighbor(X, d_lim, h, cells):
       ## Avoid the below with vectorisation  ## TODO
       for j in cells_to_points[cell_id]:
         d = distance(X[i], X[j])
+        # if d>0:
+        #   print("d>0 ", i, j, d)
         if d <= h and j != i:
           nei_ids.append(j)
           nei_dists.append(d)

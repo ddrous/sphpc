@@ -15,9 +15,9 @@ IC = "taylor-green"         ## Taylor-Green IC
 # IC = "random"         ## TODO Change this and add proper Taylor-Green IC
 # method = "AV_neg_rel" 
 
-T = 5
+T = 3
 T_SAVE = 0   #initial time for saving
-PRINT_EVERY = 10
+PRINT_EVERY = 1
 
 V_INIT = 1.0   #initial magnitude of Taylor-Green velocity
 c = 0.9157061661168617
@@ -32,7 +32,7 @@ pi = np.pi
 D_LIM = 2.*pi    ## domain limit accors all axis
 
 D = 3
-HALF_RES = 3;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
+HALF_RES = 5;  ## produces grid of 2^halfres x 2^halfres x 2^halfres number of particles
 
 cube = CubeGeom(x_lim=D_LIM, y_lim=D_LIM, z_lim=D_LIM, halfres=HALF_RES)
 
@@ -204,7 +204,9 @@ for t in tqdm(range(1, T+1)):
   ## Check nans before continuing
   # check_nans(X, V, ρ)
 
-  ρ = compute_densities(neighbor_ids, distances, h)
+  neighbor_ids, distances = periodic_fixed_radius_nearest_neighbor(X, D_LIM, h, cells)
+
+  # ρ = compute_densities(neighbor_ids, distances, h)
   F = compute_acc_forces(X, V, ρ, neighbor_ids, distances, α, β, h, c)
 
   ## Verlet advection scheme part 2
@@ -214,8 +216,13 @@ for t in tqdm(range(1, T+1)):
   trajs[t, :, :] = X
   vels[t, :, :] = V
 
-  # if (t % PRINT_EVERY == 0):
-  #   print(f"Time step: ", t)
+  # if (t % PRINT_EVERY == 1):
+    # print(f"Time step: ", t)
+  # print(neighbor_ids[:100])
+  print("\n")
+  print([(np.sum(dist <= 0.), dist.shape[0]) for dist in distances])
+  print("Maximum of forces: ", np.max(F))
+  print("Minimum of forces: ", np.min(F))
 
 print("****************  Simulation COMPLETE  *************")
 
