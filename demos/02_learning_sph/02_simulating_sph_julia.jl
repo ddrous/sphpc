@@ -19,7 +19,7 @@ const DATAFOLDER = "./demos/02_learning_sph/data/" * EXPERIMENET_ID *"/"
 const IC = "taylor-green"         ## Taylor-Green IC
 # const IC = "random"             ## Random IC
 
-const T = 100
+const T = 10
 const T_SAVE = 1   #initial time for saving
 # PRINT_EVERY = ceil(Int, T/10)
 const PRINT_EVERY = 1
@@ -48,37 +48,37 @@ const LOG_RES = 4  ##TODO Rebmember
 # """
 
 
-# const σ = Decimal(1. / (pi * (h^3)))
-
-# function W(r, h, σ)
-#     q = r / h   
-#     if (q > 2)   return Decimal(0.)   end
-#     if (q > 1)   return σ * (2 - q)^3 / 4   end
-#     return σ * (1 - Decimal(1.5) * q * q * (1 - q / 2))
-# end
-
-# function H(r, h, σ)
-#     q = r / h
-#     if (q > 2)   return Decimal(0.)   end
-#     if (q > 1)   return -3 * σ * (2 - q)^2 / (4 * h * r)   end
-#     return σ * (-3 + 9 * q / 4) / (h^2)
-# end
-
-
-## TODO this kernel is super fast because it takes the True route within the IF
-const σ = Decimal(315 / (208 * pi * (h^6)))
+const σ = Decimal(1. / (pi * (h^3)))
 
 function W(r, h, σ)
-    q = r / h
-    if (q <= 2) return σ * ((2/3) - (9*q^2/8) + (19*q^3/24) - (5*q^4/32))
-    else return Decimal(0.0) end
+    q = r / h   
+    if (q > 2)   return Decimal(0.)   end
+    if (q > 1)   return σ * (2 - q)^3 / 4   end
+    return σ * (1 - Decimal(1.5) * q * q * (1 - q / 2))
 end
 
 function H(r, h, σ)
     q = r / h
-    if (q <= 2) return σ * (- (9/4) + (19*q/8) - (5*q^2/8)) / (h^2)
-    else return Decimal(0.0) end
+    if (q > 2)   return Decimal(0.)   end
+    if (q > 1)   return -3 * σ * (2 - q)^2 / (4 * h * r)   end
+    return σ * (-3 + 9 * q / 4) / (h^2)
 end
+
+
+# TODO this kernel is super fast because it takes the True route within the IF
+# const σ = Decimal(315 / (208 * pi * (h^6)))
+
+# function W(r, h, σ)
+#     q = r / h
+#     if (q <= 2) return σ * ((2/3) - (9*q^2/8) + (19*q^3/24) - (5*q^4/32))
+#     else return Decimal(0.0) end
+# end
+
+# function H(r, h, σ)
+#     q = r / h
+#     if (q <= 2) return σ * (- (9/4) + (19*q/8) - (5*q^2/8)) / (h^2)
+#     else return Decimal(0.0) end
+# end
 
 
 
@@ -128,6 +128,7 @@ end
 
 function compute_acc_forces!(F, X, V, ρ, neighbors, dists, D, L, h, m, σ, θ, c, γ, α, β)
 
+
     N = size(ρ)[1]
     fill!(F, Decimal(0.))
 
@@ -163,10 +164,17 @@ function compute_acc_forces!(F, X, V, ρ, neighbors, dists, D, L, h, m, σ, θ, 
 
     # ke = Decimal(0.5) * mean(ρ .* sum(V.^2, dims=2))
     ke = mean(ρ .* sum(V.^2, dims=2)) / 2
-    F += θ .* V / ke
-    # F += θ .* (V .- mean(V, dims=1)) / (2 * ke)    ## TODO Change to the above as in the paper
+    # F[:, :] += θ .* V / ke
+    F[:, :] += θ .* (V .- mean(V, dims=1)) / (2 * ke)    ## TODO Change to the above as in the paper
 
-    println()
+
+    # for i in 1:N
+    #     for d in 1:D
+    #         F[i, d] = F[i, d] / 1000000
+    #     end
+    # end
+
+    # F[:, :] /= 1000000
 
 end
 
@@ -244,7 +252,7 @@ function fixed_radius_nn_search!(neighbors, distances,points_to_cell, cells_to_p
     end
 
     for cell_id in 1:nb_cells
-        cells_to_points[cell_id] = findall(k->k==cell_id, points_to_cell)
+        cells_to_points[cell_id] = findall(x->x==cell_id, points_to_cell)
     end
 
 
@@ -257,15 +265,15 @@ function fixed_radius_nn_search!(neighbors, distances,points_to_cell, cells_to_p
         for cell_id in neighbor_cells
             for j in cells_to_points[cell_id]
                 dist = distance(X[i,:], X[j,:], L)
-                if (dist < 2*h) && (j != i) 
+                if (dist < 2*h) && (j != i)
                     push!(neighs_i, j)
                     push!(dists_i, dist)
                 end
             end
         end
 
-        neighbors[i] = neighs_i[:]
-        distances[i] = dists_i[:]
+        neighbors[i] = neighs_i
+        distances[i] = dists_i
     end
 
 end
@@ -309,12 +317,6 @@ function simulate_flow()
     m = L^D / N       ## constant mass of each particle
 
 
-    println("Weakly Compressible SPH")
-    println(" -Number of particles: ", N)
-    println(" -Number of time steps: ", T)
-    println(" -Initial condition: ", IC)
-
-
     trajs = Array{Decimal}(undef, (T+1, N, D))
     vels = Array{Decimal}(undef, (T+1, N, D))
     rhos = Array{Decimal}(undef, (T+1, N))
@@ -348,6 +350,16 @@ function simulate_flow()
 
     energy = Float64[]
 
+
+    println("Weakly Compressible SPH")
+    println(" -Number of particles: ", N)
+    println(" -Number of time steps: ", T)
+    println(" -Number of grid cells for NN serach: ", size(cells)[1])
+    println(" -Initial condition: ", IC)
+
+
+
+
     for t in 1:T
         if t % PRINT_EVERY == 0
             println("simulating time step: ", t)
@@ -360,6 +372,8 @@ function simulate_flow()
         
             println("max rho = ", maximum(ρ[:]))
             println("min rho = ", minimum(ρ[:]))
+
+            println()
         end
 
         ## Initial density
@@ -396,7 +410,19 @@ end
 
 
 
+
+
+
+
+
+
 trajs, vels, rhos = @time simulate_flow();
+
+
+
+
+
+
 
 
 ##
@@ -450,3 +476,17 @@ end
 
 ##
 
+# println()
+# x = Float64[1 2 3;4 5 6;7 8 9]
+
+# function foo!(x)
+#     fill!(x, 0)
+#     # x = x^5 .+ 10.
+#     x[:, :] = x[:, :]^5 .+ 10.
+# end
+
+# @code_warntype foo!(x)
+
+# @time foo!(x)
+
+# # x
