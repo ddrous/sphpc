@@ -19,25 +19,24 @@ const DATAFOLDER = "./demos/02_learning_sph/data/" * EXPERIMENET_ID *"/"
 const IC = "taylor-green"         ## Taylor-Green IC
 # const IC = "random"             ## Random IC
 
-const T = 10
+const T = 50
 const T_SAVE = 1   #initial time for saving
-# PRINT_EVERY = ceil(Int, T/10)
-const PRINT_EVERY = 1
+PRINT_EVERY = ceil(Int, T/10)
 const DURATION = 15   ## Seconds
 
 const MAX_VEL = Decimal(1.0)
 const c = Decimal(0.9157061661168617)
-const h = Decimal(0.2)  ##TODO Rebmember
+const h = Decimal(0.2)
 const α = Decimal(0.45216843078299573)
 const β = Decimal(0.3346233846532608)
-const γ = Decimal(1.0)                     ## TODO Equal 7 in the paper (see fig 1)
+const γ = Decimal(1.0)  ## ! This equals 7 in the paper (see fig 1)
 const θ = Decimal(0.00430899795067121)
 const dt = Decimal(0.4 * h / c)
 
 const L = Decimal(2*pi)    ## domain limit accors all axis
 
 const D = 3
-const LOG_RES = 4  ##TODO Rebmember
+const LOG_RES = 4   ## 2^LOG_RES particles per axis
 
 
 
@@ -52,32 +51,33 @@ const σ = Decimal(1. / (pi * (h^3)))
 
 function W(r, h, σ)
     q = r / h   
-    if (q > 2)   return Decimal(0.)   end
-    if (q > 1)   return σ * (2 - q)^3 / 4   end
-    return σ * (1 - Decimal(1.5) * q * q * (1 - q / 2))
+    if (q < 1) return σ * (1 - Decimal(1.5) * q * q * (1 - q / 2))
+    elseif (q < 2) return σ * (2 - q)^3 / 4
+    else return Decimal(0.) end
 end
 
 function H(r, h, σ)
     q = r / h
-    if (q > 2)   return Decimal(0.)   end
-    if (q > 1)   return -3 * σ * (2 - q)^2 / (4 * h * r)   end
-    return σ * (-3 + 9 * q / 4) / (h^2)
+    if (q < 1) return σ * (-3 + 9 * q / 4) / (h^2)
+    elseif (q < 2) return -3 * σ * (2 - q)^2 / (4 * h * r)
+    else return Decimal(0.) end
 end
 
 
-# TODO this kernel is super fast because it takes the True route within the IF
+
+## * this kernel is "faster" because it takes the True route within the IF
 # const σ = Decimal(315 / (208 * pi * (h^6)))
 
 # function W(r, h, σ)
 #     q = r / h
 #     if (q <= 2) return σ * ((2/3) - (9*q^2/8) + (19*q^3/24) - (5*q^4/32))
-#     else return Decimal(0.0) end
+#     else return Decimal(0.) end
 # end
 
 # function H(r, h, σ)
 #     q = r / h
 #     if (q <= 2) return σ * (- (9/4) + (19*q/8) - (5*q^2/8)) / (h^2)
-#     else return Decimal(0.0) end
+#     else return Decimal(0.) end
 # end
 
 
@@ -168,14 +168,6 @@ function compute_acc_forces!(F, X, V, ρ, neighbors, dists, D, L, h, m, σ, θ, 
     F[:, :] += θ .* (V .- mean(V, dims=1)) / (2 * ke)    ## TODO Change to the above as in the paper
 
 
-    # for i in 1:N
-    #     for d in 1:D
-    #         F[i, d] = F[i, d] / 1000000
-    #     end
-    # end
-
-    # F[:, :] /= 1000000
-
 end
 
 
@@ -198,9 +190,11 @@ function make_cells_for_nn_search(L, h, D)
                 for k_ in k-1:k+1
                     for j_ in j-1:j+1
                         for i_ in i-1:i+1
-                                neighbors[counter] = compute_cell_id(i_%n+1, j_%n+1, k_%n+1, n)
 
-                                counter += 1
+                            ## ! Use mod1, not mod
+                            neighbors[counter] = compute_cell_id(mod1(i_, n), mod1(j_, n), mod1(k_, n), n)
+
+                            counter += 1
                         end
                     end
                 end
@@ -226,9 +220,6 @@ function find_cell(x, h, n)
 end
 
 function distance(x, y, L)
-    # diff = abs.(x - y)
-    # diff_min = min.(diff, L .- diff)
-    # return sqrt(sum(diff_min.^2))
 
     diff1 = abs(x[1] - y[1])
     diff2 = abs(x[2] - y[2])
@@ -238,7 +229,6 @@ function distance(x, y, L)
                 min(diff2, L-diff2)^2 +
                 min(diff3, L-diff3)^2)
 
-    # return sqrt(diff1^2 + diff2^2 + diff3^2)
 end
 
 function fixed_radius_nn_search!(neighbors, distances,points_to_cell, cells_to_points, cells, X, L, h)
@@ -311,7 +301,6 @@ end
 
 function simulate_flow()
 
-
     particles = meshgrid(L, L, L, LOG_RES)
     N = size(particles)[1]
     m = L^D / N       ## constant mass of each particle
@@ -348,32 +337,21 @@ function simulate_flow()
     points_to_cell = Vector{Int}(undef, N)
     cells_to_points = Vector{Vector{Int}}(undef, size(cells)[1])
 
-    energy = Float64[]
+    energy = Vector{Decimal}(undef, T)
 
 
-    println("Weakly Compressible SPH")
-    println(" -Number of particles: ", N)
-    println(" -Number of time steps: ", T)
-    println(" -Number of grid cells for NN serach: ", size(cells)[1])
-    println(" -Initial condition: ", IC)
+    println("\n######## Weakly Compressible SPH in 3D ########\n")
+    println("  -Number of particles: ", N)
+    println("  -Number of time steps: ", T)
+    println("  -Number of grid cells for NN serach: ", size(cells)[1])
+    println("  -Initial condition: ", IC)
 
 
-
+    println("\n****** Simulating the particle flow ******\n")
 
     for t in 1:T
         if t % PRINT_EVERY == 0
-            println("simulating time step: ", t)
-
-            println("max F = ", maximum(F[:]))
-            println("min F = ", minimum(F[:]))
-        
-            println("max V = ", maximum(V[:]))
-            println("min V = ", minimum(V[:]))
-        
-            println("max rho = ", maximum(ρ[:]))
-            println("min rho = ", minimum(ρ[:]))
-
-            println()
+            println("  time step ", t)
         end
 
         ## Initial density
@@ -393,8 +371,7 @@ function simulate_flow()
         V += dt .* F / 2
 
         ## Compute kinetic energy
-        ke = mean(ρ .* sum(V.^2, dims=2)) / 2
-        push!(energy, ke)
+        energy[t] = mean(ρ .* sum(V.^2, dims=2)) / 2
 
         trajs[t+1, :, :] = X
         vels[t+1, :, :] = V
@@ -402,7 +379,9 @@ function simulate_flow()
 
     end
 
-    display(plot(energy, label="KE"))
+    display(plot(energy, xlabel="time", linewidth=4, title="Kinetic energy"))
+
+    println("\nDONE !\n")
 
     return trajs, vels, rhos
 
@@ -430,11 +409,13 @@ trajs, vels, rhos = @time simulate_flow();
 
 
 function visualise_trajectory(pos, sim_time=5)
+
+    println("\n****** Visualising the particle flow ******\n")
+
     gr(size=(1000,800))
 
     # sim_path = DATAFOLDER*"trajs_N$(N)_T$(T)_h$(h)_$(IC)_c$(c)_α$(α)_β$(β)_θ$(θ).mp4"
     sim_path = DATAFOLDER*"trajectory.mp4"
-    println("**************** Visualising the particle flow ***************")
     N = size(pos)[2]
 
     #theme(:juno)
@@ -446,7 +427,7 @@ function visualise_trajectory(pos, sim_time=5)
         Plots.scatter!(pos[i, (n_2+1):end, 1], pos[i, (n_2+1):end, 2], pos[i, (n_2+1):end, 3], color = "red", ms = m_s)
     end
     gif(anim, sim_path, fps = ceil(Int, T/sim_time))
-    println("****************  Visualisation COMPLETE  *************")
+    println("\nDONE !\n")
 end
 
 
@@ -460,7 +441,8 @@ visualise_trajectory(trajs, DURATION)
 
 
 function save_data_files(trajs, vels, rhos, t_save)
-    println(" ****************** Saving data files ***********************")
+    println("\n******** Saving data files ************\n*")
+
     pos_path = DATAFOLDER*"trajs_N$(N)_T$(T)_dt$(dt)_ts$(t_save)_h$(h)_$(IC)_θ$(θ).npy"
     vel_path = DATAFOLDER*"/vels_N$(N)_T$(T)_dt$(dt)_ts$(t_save)_h$(h)_$(IC)_θ$(θ).npy"
     rho_path = DATAFOLDER*"/rhos_N$(N)_T$(T)_dt$(dt)_ts$(t_save)_h$(h)_$(IC)_θ$(θ).npy"
@@ -468,25 +450,11 @@ function save_data_files(trajs, vels, rhos, t_save)
     npzwrite(pos_path, trajs[t_save:end,:,:])
     npzwrite(vel_path, vels[t_save:end,:,:])
     npzwrite(rho_path, rhos[t_save:end,:])
+
+    println("\nDONE !\n*")
 end
 
 # save_data_files(trajs, vels, rhos, T_SAVE)
 
 
-
 ##
-
-# println()
-# x = Float64[1 2 3;4 5 6;7 8 9]
-
-# function foo!(x)
-#     fill!(x, 0)
-#     # x = x^5 .+ 10.
-#     x[:, :] = x[:, :]^5 .+ 10.
-# end
-
-# @code_warntype foo!(x)
-
-# @time foo!(x)
-
-# # x
