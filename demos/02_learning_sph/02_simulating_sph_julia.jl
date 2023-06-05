@@ -19,9 +19,9 @@ const DATAFOLDER = "./demos/02_learning_sph/data/" * EXPERIMENET_ID *"/"
 const IC = "taylor-green"         ## Taylor-Green IC
 # const IC = "random"             ## Random IC
 
-const T = 50
+const T = 20
 const T_SAVE = 1   #initial time for saving
-PRINT_EVERY = ceil(Int, T/10)
+PRINT_EVERY = ceil(Int, T/5)
 const DURATION = 15   ## Seconds
 
 const MAX_VEL = Decimal(1.0)
@@ -36,7 +36,7 @@ const dt = Decimal(0.4 * h / c)
 const L = Decimal(2*pi)    ## domain limit accors all axis
 
 const D = 3
-const LOG_RES = 4   ## 2^LOG_RES particles per axis
+const LOG_RES = 5   ## 2^LOG_RES particles per axis
 
 
 
@@ -132,11 +132,11 @@ function compute_acc_forces!(F, X, V, ρ, neighbors, dists, D, L, h, m, σ, θ, 
     N = size(ρ)[1]
     fill!(F, Decimal(0.))
 
-    for i in 1:N
+    @views for i in 1:N
         vali = P(ρ[i], c, γ) / (ρ[i]^2)
         nb_neighbors = size(neighbors[i])[1]
 
-        for j_ in 1:nb_neighbors
+        @inbounds for j_ in 1:nb_neighbors
             j = neighbors[i][j_]
 
             ## Compute artificial viscosity
@@ -154,7 +154,7 @@ function compute_acc_forces!(F, X, V, ρ, neighbors, dists, D, L, h, m, σ, θ, 
             Πij = compute_Π(Xij, Vij, ρ[i], ρ[j], h, c, γ, α, β)
 
             valj = P(ρ[j], c, γ) / (ρ[j]^2)
-        
+
             ## Add up all forces
             F[i, :] += -m*(vali + valj + Πij) * H(dists[i][j_], h, σ) .* Xij ## TODO External forcing?
 
@@ -166,7 +166,6 @@ function compute_acc_forces!(F, X, V, ρ, neighbors, dists, D, L, h, m, σ, θ, 
     ke = mean(ρ .* sum(V.^2, dims=2)) / 2
     # F[:, :] += θ .* V / ke
     F[:, :] += θ .* (V .- mean(V, dims=1)) / (2 * ke)    ## TODO Change to the above as in the paper
-
 
 end
 
@@ -237,16 +236,16 @@ function fixed_radius_nn_search!(neighbors, distances,points_to_cell, cells_to_p
     n = ceil(Int, L / (2*h))
     nb_cells = n^D      ## size(cells)[1]
 
-    for i in 1:N
+    @views for i in 1:N
         points_to_cell[i] = find_cell(X[i,:], h, n)
     end
 
-    for cell_id in 1:nb_cells
+    @views for cell_id in 1:nb_cells
         cells_to_points[cell_id] = findall(x->x==cell_id, points_to_cell)
     end
 
 
-    for i in 1:N
+    @views for i in 1:N
         neighbor_cells = cells[points_to_cell[i], :]
 
         neighs_i = Int[]
@@ -280,7 +279,7 @@ function random_ic(points, vmag)
 end
 
 
-function taylor_green_ic(points, vmag)
+@views function taylor_green_ic(points, vmag)
     x = points[:,1]
     y = points[:,2]
     z = points[:,3]
