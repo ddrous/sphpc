@@ -2,6 +2,9 @@ import os, random
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import jax
+import jax.numpy as jnp
+
 
 def random_name(length=5):
     "Make random names to identify runs"
@@ -199,3 +202,25 @@ def visualise_sph_trajectory(trajs, scals, videoname, duration=10, domain_lim=No
         pl.write_frame()
 
     pl.close()
+
+
+
+def flatten_params(params):
+    tree_def = jax.tree_util.tree_structure(params)
+
+    pytree = jax.tree_util.tree_leaves(params)
+    flat_params = jnp.concatenate([x.flatten() for x in pytree])
+    flat_shapes = [jnp.shape(x) for x in pytree]
+
+    return flat_params, flat_shapes, tree_def
+
+
+def unflatten_params(flat_params, flat_shapes, tree_def):
+    pytree = []
+    i = 0
+    for shape in flat_shapes:
+        size = np.prod(shape)
+        pytree.append(jnp.reshape(flat_params[i:i+size], shape))
+        i += size
+
+    return jax.tree_util.tree_unflatten(tree_def, pytree)
